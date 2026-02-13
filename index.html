@@ -3,127 +3,176 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake Omega 3D</title>
+<title>Snake Elite</title>
 <style>
-body{margin:0;overflow:hidden;background:black;color:white;font-family:Arial}
-#menu{
-position:absolute;top:20px;left:20px;z-index:10;
+body{
+margin:0;
+background:#0b0f14;
+display:flex;
+flex-direction:column;
+align-items:center;
+font-family:Arial;
+color:white;
 }
-button{
-padding:8px 15px;margin:5px;
-background:#00ffee;border:none;
-font-weight:bold;cursor:pointer;border-radius:6px;
+h1{
+color:#00f7ff;
+text-shadow:0 0 15px #00f7ff;
+}
+canvas{
+background:#000;
+border:2px solid #00f7ff;
+box-shadow:0 0 20px #00f7ff;
+}
+.info{
+margin:10px;
+display:flex;
+gap:20px;
 }
 </style>
 </head>
 <body>
 
-<div id="menu">
-<button onclick="startGame()">3D Başlat</button>
-<button onclick="connectOnline()">Online Bağlan</button>
+<h1>🐍 Snake Elite</h1>
+<div class="info">
+<div>Skor: <span id="score">0</span></div>
+<div>Level: <span id="level">1</span></div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<canvas id="game" width="500" height="500"></canvas>
 
 <script>
-let scene,camera,renderer;
-let snake=[],direction=new THREE.Vector3(1,0,0);
-let food;
-let gridSize=20;
-let speed=200;
-let gameInterval;
-let socket=null;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-function init(){
-scene=new THREE.Scene();
-camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
-renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth,window.innerHeight);
-document.body.appendChild(renderer.domElement);
+const size = 20;
+const tiles = canvas.width / size;
 
-camera.position.set(0,50,50);
-camera.lookAt(0,0,0);
+let snake = [{x:10,y:10}];
+let aiSnake = [{x:5,y:5}];
 
-const light=new THREE.PointLight(0x00ffee,2);
-light.position.set(20,50,20);
-scene.add(light);
+let dir = {x:1,y:0};
+let nextDir = {x:1,y:0};
 
-createSnake();
-createFood();
-animate();
+let food = spawnFood();
+let score = 0;
+let level = 1;
+let speed = 8;
+
+let lastTime = 0;
+let paused = false;
+
+function spawnFood(){
+return {
+x: Math.floor(Math.random()*tiles),
+y: Math.floor(Math.random()*tiles)
+};
 }
 
-function createSnake(){
-snake=[];
-for(let i=0;i<5;i++){
-const cube=new THREE.Mesh(
-new THREE.BoxGeometry(1,1,1),
-new THREE.MeshStandardMaterial({color:0x00ffee,emissive:0x00ffee})
-);
-cube.position.set(-i,0,0);
-scene.add(cube);
-snake.push(cube);
-}
-}
+document.addEventListener("keydown", e=>{
+if(e.key==="ArrowUp" && dir.y!==1) nextDir={x:0,y:-1};
+if(e.key==="ArrowDown" && dir.y!==-1) nextDir={x:0,y:1};
+if(e.key==="ArrowLeft" && dir.x!==1) nextDir={x:-1,y:0};
+if(e.key==="ArrowRight" && dir.x!==-1) nextDir={x:1,y:0};
+if(e.key==="p") paused=!paused;
+if(e.key==="r") reset();
+});
 
-function createFood(){
-const geo=new THREE.BoxGeometry(1,1,1);
-const mat=new THREE.MeshStandardMaterial({color:0xff0000});
-food=new THREE.Mesh(geo,mat);
-food.position.set(randPos(),0,randPos());
-scene.add(food);
-}
-
-function randPos(){
-return Math.floor(Math.random()*gridSize)-gridSize/2;
+function reset(){
+snake=[{x:10,y:10}];
+aiSnake=[{x:5,y:5}];
+dir={x:1,y:0};
+nextDir={x:1,y:0};
+food=spawnFood();
+score=0;
+level=1;
+speed=8;
 }
 
-function moveSnake(){
-const headPos=snake[0].position.clone();
-headPos.add(direction);
+function update(){
+dir=nextDir;
+const head = {x: snake[0].x+dir.x, y: snake[0].y+dir.y};
 
-if(headPos.distanceTo(food.position)<1){
-createFood();
-}else{
-const tail=snake.pop();
-tail.position.copy(headPos);
-snake.unshift(tail);
+if(collision(head,snake) || outOfBounds(head)){
+reset();
 return;
 }
 
-const newCube=new THREE.Mesh(
-new THREE.BoxGeometry(1,1,1),
-new THREE.MeshStandardMaterial({color:0x00ffee,emissive:0x00ffee})
-);
-newCube.position.copy(headPos);
-scene.add(newCube);
-snake.unshift(newCube);
+snake.unshift(head);
+
+if(head.x===food.x && head.y===food.y){
+score++;
+level=Math.floor(score/5)+1;
+speed=8+level;
+food=spawnFood();
+}else{
+snake.pop();
 }
 
-document.addEventListener("keydown",e=>{
-if(e.key==="ArrowUp")direction.set(0,0,-1);
-if(e.key==="ArrowDown")direction.set(0,0,1);
-if(e.key==="ArrowLeft")direction.set(-1,0,0);
-if(e.key==="ArrowRight")direction.set(1,0,0);
+updateAI();
+}
+
+function updateAI(){
+let head = {x: aiSnake[0].x, y: aiSnake[0].y};
+
+if(head.x < food.x) head.x++;
+else if(head.x > food.x) head.x--;
+else if(head.y < food.y) head.y++;
+else if(head.y > food.y) head.y--;
+
+if(outOfBounds(head) || collision(head,aiSnake)) return;
+
+aiSnake.unshift(head);
+aiSnake.pop();
+}
+
+function collision(pos, body){
+return body.some(s=>s.x===pos.x && s.y===pos.y);
+}
+
+function outOfBounds(pos){
+return pos.x<0||pos.y<0||pos.x>=tiles||pos.y>=tiles;
+}
+
+function draw(){
+ctx.fillStyle="#000";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.shadowBlur=20;
+ctx.shadowColor="#00f7ff";
+ctx.fillStyle="#00f7ff";
+snake.forEach(s=>{
+ctx.fillRect(s.x*size,s.y*size,size,size);
 });
 
-function animate(){
-requestAnimationFrame(animate);
-renderer.render(scene,camera);
+ctx.shadowColor="#ff00ff";
+ctx.fillStyle="#ff00ff";
+aiSnake.forEach(s=>{
+ctx.fillRect(s.x*size,s.y*size,size,size);
+});
+
+ctx.shadowBlur=15;
+ctx.shadowColor="red";
+ctx.fillStyle="red";
+ctx.fillRect(food.x*size,food.y*size,size,size);
+
+document.getElementById("score").innerText=score;
+document.getElementById("level").innerText=level;
 }
 
-function startGame(){
-init();
-gameInterval=setInterval(moveSnake,speed);
+function gameLoop(timestamp){
+if(!paused){
+if(timestamp-lastTime > 1000/speed){
+update();
+lastTime=timestamp;
+}
+draw();
+}
+requestAnimationFrame(gameLoop);
 }
 
-function connectOnline(){
-socket=new WebSocket("ws://localhost:8080");
-socket.onopen=()=>alert("Online Bağlandı!");
-socket.onmessage=(msg)=>console.log(msg.data);
-}
+requestAnimationFrame(gameLoop);
 </script>
 
 </body>
 </html>
+
 
