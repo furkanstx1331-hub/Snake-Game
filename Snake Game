@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake PRO</title>
+
+<style>
+body{
+    margin:0;
+    background:#0f0f0f;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    font-family:Arial;
+    color:white;
+}
+
+h1{
+    color:#00ffcc;
+    text-shadow:0 0 15px #00ffcc;
+}
+
+canvas{
+    background:black;
+    border:3px solid #00ffcc;
+    box-shadow:0 0 20px #00ffcc;
+}
+
+.info{
+    display:flex;
+    gap:30px;
+    margin:10px;
+}
+
+button{
+    padding:8px 20px;
+    background:#00ffcc;
+    border:none;
+    font-weight:bold;
+    cursor:pointer;
+    border-radius:6px;
+}
+
+.mobile-controls{
+    margin-top:15px;
+    display:grid;
+    grid-template-columns:60px 60px 60px;
+    gap:10px;
+}
+
+.mobile-controls button{
+    width:60px;
+    height:60px;
+    font-size:20px;
+}
+</style>
+</head>
+<body>
+
+<h1>🐍 Snake PRO</h1>
+
+<div class="info">
+<div>Oyuncu1 Skor: <span id="score1">0</span></div>
+<div>Oyuncu2 Skor: <span id="score2">0</span></div>
+<div>Level: <span id="level">1</span></div>
+<div>High Score: <span id="highscore">0</span></div>
+</div>
+
+<canvas id="game" width="400" height="400"></canvas>
+<button onclick="restart()">Yeniden Başlat</button>
+
+<div class="mobile-controls">
+<div></div>
+<button onclick="setDir('UP')">⬆</button>
+<div></div>
+<button onclick="setDir('LEFT')">⬅</button>
+<button onclick="setDir('DOWN')">⬇</button>
+<button onclick="setDir('RIGHT')">➡</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const box = 20;
+
+let snake1 = [{x:200,y:200}];
+let snake2 = [{x:100,y:100}];
+
+let dir1="RIGHT";
+let dir2="RIGHT";
+
+let food=randomFood();
+let score1=0;
+let score2=0;
+let level=1;
+let speed=120;
+let game;
+
+let highscore = localStorage.getItem("snakeHigh") || 0;
+document.getElementById("highscore").innerText=highscore;
+
+const eatSound = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-game-ball-tap-2073.mp3");
+
+function randomFood(){
+    return{
+        x:Math.floor(Math.random()*20)*box,
+        y:Math.floor(Math.random()*20)*box
+    };
+}
+
+document.addEventListener("keydown", e=>{
+    if(e.key==="ArrowLeft" && dir1!=="RIGHT") dir1="LEFT";
+    if(e.key==="ArrowUp" && dir1!=="DOWN") dir1="UP";
+    if(e.key==="ArrowRight" && dir1!=="LEFT") dir1="RIGHT";
+    if(e.key==="ArrowDown" && dir1!=="UP") dir1="DOWN";
+
+    if(e.key==="a" && dir2!=="RIGHT") dir2="LEFT";
+    if(e.key==="w" && dir2!=="DOWN") dir2="UP";
+    if(e.key==="d" && dir2!=="LEFT") dir2="RIGHT";
+    if(e.key==="s" && dir2!=="UP") dir2="DOWN";
+});
+
+function setDir(d){ if(dir1!=="DOWN"||d!=="UP") dir1=d }
+
+function draw(){
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,400,400);
+
+    drawSnake(snake1,"#00ffcc");
+    drawSnake(snake2,"#ff00ff");
+
+    ctx.fillStyle="red";
+    ctx.fillRect(food.x,food.y,box,box);
+
+    moveSnake(snake1,dir1,1);
+    moveSnake(snake2,dir2,2);
+}
+
+function drawSnake(snake,color){
+    snake.forEach((s,i)=>{
+        ctx.fillStyle=color;
+        ctx.shadowBlur=15;
+        ctx.shadowColor=color;
+        ctx.fillRect(s.x,s.y,box,box);
+    });
+}
+
+function moveSnake(snake,dir,player){
+    let headX=snake[0].x;
+    let headY=snake[0].y;
+
+    if(dir==="LEFT") headX-=box;
+    if(dir==="RIGHT") headX+=box;
+    if(dir==="UP") headY-=box;
+    if(dir==="DOWN") headY+=box;
+
+    if(headX<0||headY<0||headX>=400||headY>=400||collision(headX,headY,snake)){
+        clearInterval(game);
+        alert("Oyun Bitti!");
+        return;
+    }
+
+    let newHead={x:headX,y:headY};
+
+    if(headX===food.x && headY===food.y){
+        eatSound.play();
+        food=randomFood();
+        if(player===1){score1++;document.getElementById("score1").innerText=score1;}
+        else{score2++;document.getElementById("score2").innerText=score2;}
+        updateLevel();
+    }else{
+        snake.pop();
+    }
+
+    snake.unshift(newHead);
+}
+
+function collision(x,y,snake){
+    return snake.some(s=>s.x===x && s.y===y);
+}
+
+function updateLevel(){
+    let total = score1+score2;
+    level = Math.floor(total/5)+1;
+    speed = 120 - (level*5);
+    if(speed<60) speed=60;
+    document.getElementById("level").innerText=level;
+    clearInterval(game);
+    game=setInterval(draw,speed);
+
+    if(total>highscore){
+        highscore=total;
+        localStorage.setItem("snakeHigh",highscore);
+        document.getElementById("highscore").innerText=highscore;
+    }
+}
+
+function restart(){
+    snake1=[{x:200,y:200}];
+    snake2=[{x:100,y:100}];
+    score1=0;score2=0;
+    level=1;speed=120;
+    document.getElementById("score1").innerText=0;
+    document.getElementById("score2").innerText=0;
+    document.getElementById("level").innerText=1;
+    food=randomFood();
+    clearInterval(game);
+    game=setInterval(draw,speed);
+}
+
+game=setInterval(draw,speed);
+</script>
+
+</body>
+</html>
